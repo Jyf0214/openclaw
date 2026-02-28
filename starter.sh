@@ -53,7 +53,7 @@ fi
 # 3. 启动主应用 (CMD)
 # =========================================================
 echo "Starting main application..."
-sudo chmod -R 777 /home/node/.openclaw
+sudo chmod -R 777 /home/node/.openclaw || true
 # 使用 exec 可以让 Node.js 进程替换当前的 Bash 脚本进程 (PID 1)，
 # 这样容器能正确接收并处理 SIGTERM 等系统级停止信号。
 exec openclaw gateway --port 18789 --verbose --allow-unconfigured
