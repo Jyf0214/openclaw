@@ -56,4 +56,4 @@ echo "Starting main application..."
 
 # 使用 exec 可以让 Node.js 进程替换当前的 Bash 脚本进程 (PID 1)，
 # 这样容器能正确接收并处理 SIGTERM 等系统级停止信号。
-exec node openclaw.mjs gateway --allow-unconfigured
+exec openclaw gateway --port 18789 --verbose --allow-unconfigured
