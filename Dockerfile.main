@@ -41,6 +41,7 @@ COPY --chown=node:node starter.sh .
 
 # 赋予脚本可执行权限
 RUN chmod +x starter.sh
+RUN chmod +x /home/node
 RUN sudo npm install -g pm2
 
 # 10. 确保最终运行状态为 node 用户
