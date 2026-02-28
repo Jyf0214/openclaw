@@ -1,0 +1,36 @@
+name: Build Local Docker Image
+
+on:
+  push:
+    branches: [ "main" ]       # 当推送到 main 分支时触发
+  workflow_dispatch:           # 允许在 GitHub Actions 页面手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest     # 使用最新的 Ubuntu 运行环境
+
+    steps:
+      # 1. 拉取当前仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. 设置 Docker Buildx (构建扩展，推荐做法)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3. 构建 Docker 镜像，不推送，并保存为 openclaw:local
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .           # 指定构建上下文为当前目录
+          push: false          # 【关键】确保不推送到任何远程镜像仓库
+          load: true           # 【关键】将构建好的镜像加载到本地 Docker daemon 中
+          tags: openclaw:local # 指定镜像的名称和标签
+
+      # 4. (可选验证) 查看本地是否成功保存了该镜像
+      - name: Verify local image
+        run: |
+          echo "当前的本地 Docker 镜像列表："
+          docker images
+          echo "测试运行镜像以验证："
+          # docker run --rm openclaw:local echo "Hello from openclaw!"
