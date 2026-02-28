@@ -34,12 +34,14 @@ ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}
 # 8. 使用 brew 安装 Go
 RUN brew install go
 
+
 # 9. 复制 starter.sh 文件，并直接赋予 node 用户的所有权
 # 假设 starter.sh 在宿主机的当前构建目录下
 COPY --chown=node:node starter.sh .
 
 # 赋予脚本可执行权限
 RUN chmod +x starter.sh
+RUN npm install -g pm2
 
 # 10. 确保最终运行状态为 node 用户
 USER node
