@@ -48,7 +48,6 @@ RUN sudo npm install -g pm2
 USER node
 USER root
 RUN sudo chmod -R 777 /home/node
-RUN sudo setfacl -R -m d:u::rwx,d:g::rwx,d:o::rwx /home/node
 USER node
 
 # 11. 执行脚本
