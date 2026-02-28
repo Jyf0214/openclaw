@@ -12,21 +12,32 @@ echo "Fetching public keys for GitHub user: ${GITHUB_USER}..."
 # 拉取公钥内容
 PUB_KEYS=$(curl -fsSL "https://github.com/${GITHUB_USER}.keys" || echo "")
 
-# 检查拉取到的内容是否包含合法的 ssh key 特征 (ssh-rsa, ssh-ed25519 等)
+# 检查拉取到的内容是否包含合法的 ssh key 特征
 if echo "$PUB_KEYS" | grep -qE "^ssh-|^ecdsa-"; then
     echo "Successfully retrieved public key(s) for ${GITHUB_USER}."
-    
-    # 为当前系统用户(node)创建并配置 .ssh 目录
-    mkdir -p ~/.ssh
-    chmod 700 ~/.ssh
-    echo "$PUB_KEYS" > ~/.ssh/authorized_keys
-    chmod 600 ~/.ssh/authorized_keys
+
+    # 【核心修复区】：无论谁运行此脚本，都强制将密钥配置给 node 用户
+    TARGET_USER="node"
+    TARGET_HOME="/home/node"
+
+    # 1. 防止 SSH 严格模式 (StrictModes) 因为父目录权限过宽而拒绝认证
+    sudo chmod 755 ${TARGET_HOME} || true
+
+    # 2. 创建目录并写入密钥
+    sudo mkdir -p ${TARGET_HOME}/.ssh
+    sudo chmod 700 ${TARGET_HOME}/.ssh
+    # 注意：这里需要借用 bash -c 以 sudo 权限写入文件
+    sudo bash -c "echo '$PUB_KEYS' > ${TARGET_HOME}/.ssh/authorized_keys"
+    sudo chmod 600 ${TARGET_HOME}/.ssh/authorized_keys
+
+    # 3. 修正所有权 (非常重要！确保 node 用户拥有这些文件)
+    sudo chown -R ${TARGET_USER}:${TARGET_USER} ${TARGET_HOME}/.ssh
 
     # 创建 SSH 运行所需的特权分离目录
     sudo mkdir -p /run/sshd
     sudo chmod 755 /run/sshd
 
-    # 确保生成了主机密钥（通常在安装openssh时已生成，保险起见再执行一次）
+    # 确保生成了主机密钥
     sudo ssh-keygen -A
 
     # 使用 PM2 启动 SSH 服务 (-D 阻止后台运行交由pm2管理，-p 指定端口)
@@ -36,24 +47,21 @@ else
     echo "Warning: Failed to fetch valid public keys. SSH server will NOT be started."
 fi
 
-
 # =========================================================
 # 2. 启动 Cloudflared (如果环境变量存在)
 # =========================================================
-if [ -n "$CLOUDFLARED_TOKEN" ]; then
+if[ -n "$CLOUDFLARED_TOKEN" ]; then
     echo "CLOUDFLARED_TOKEN detected. Starting cloudflared..."
-    # 同样使用 pm2 后台挂载 cloudflared 进程
     npx --yes pm2 start "cloudflared tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}" --name cloudflared
 else
     echo "Warning: CLOUDFLARED_TOKEN is not set. Skipping cloudflared startup."
 fi
-
 
 # =========================================================
 # 3. 启动主应用 (CMD)
 # =========================================================
 echo "Starting main application..."
 sudo chmod -R 777 /home/node/.openclaw || true
-# 使用 exec 可以让 Node.js 进程替换当前的 Bash 脚本进程 (PID 1)，
-# 这样容器能正确接收并处理 SIGTERM 等系统级停止信号。
+
+# 移交主进程给 openclaw
 exec openclaw gateway --port 18789 --verbose --allow-unconfigured
