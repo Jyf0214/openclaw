@@ -1,36 +1,46 @@
-name: Build Local Docker Image
+name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ "main" ]       # 当推送到 main 分支时触发
-  workflow_dispatch:           # 允许在 GitHub Actions 页面手动触发
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest     # 使用最新的 Ubuntu 运行环境
+  build-and-push:
+    runs-on: ubuntu-latest
 
     steps:
-      # 1. 拉取当前仓库代码
-      - name: Checkout repository
+      # 1. 拉取当前仓库代码 (包含你的 Dockerfile.main 和 starter.sh)
+      - name: Checkout current repository
         uses: actions/checkout@v4
 
-      # 2. 设置 Docker Buildx (构建扩展，推荐做法)
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # 2. 登录 Docker Hub (推送必须)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. 构建 Docker 镜像，不推送，并保存为 openclaw:local
-      - name: Build Docker image
+      # 【注意】这里我们刻意没有使用 docker/setup-buildx-action 
+      # 因为我们需要使用宿主机默认的 Docker 服务，这样第二步构建时才能直接使用第一步存在本地的 `openclaw:local`
+
+      # 3. 从远程 Git 仓库拉取并构建 openclaw:local (不推送)
+      - name: Build local image from remote repository
         uses: docker/build-push-action@v5
         with:
-          context: .           # 指定构建上下文为当前目录
-          push: false          # 【关键】确保不推送到任何远程镜像仓库
-          load: true           # 【关键】将构建好的镜像加载到本地 Docker daemon 中
-          tags: openclaw:local # 指定镜像的名称和标签
+          context: https://github.com/openclaw/openclaw.git  # 直接使用远程仓库作为构建上下文
+          push: false                                        # 不推送
+          load: true                                         # 加载到本地 Docker 缓存
+          tags: openclaw:local                               # 命名为 openclaw:local
 
-      # 4. (可选验证) 查看本地是否成功保存了该镜像
-      - name: Verify local image
-        run: |
-          echo "当前的本地 Docker 镜像列表："
-          docker images
-          echo "测试运行镜像以验证："
-          # docker run --rm openclaw:local echo "Hello from openclaw!"
+      # 4. 使用当前仓库的 Dockerfile.main 构建并推送 main 标签
+      - name: Build and Push main image
+        uses: docker/build-push-action@v5
+        with:
+          context: .                                         # 使用当前仓库根目录
+          file: ./Dockerfile.main                            # 指定你写的 Dockerfile.main
+          push: true                                         # 推送到 Docker Hub
+          # 请注意：这里替换了 DockerHub 用户名前缀，标准格式为 username/repository:tag
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/openclaw:main
