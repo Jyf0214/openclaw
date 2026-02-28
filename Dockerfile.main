@@ -1,0 +1,48 @@
+# 1. 拉取上面在 GitHub Actions 中构建好的本地镜像
+FROM openclaw:local
+
+# 2. 临时切换到 root 用户，用于安装系统级依赖
+USER root
+
+# 设置无交互模式，防止 apt-get 安装时卡在时区/选项提示
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 3. 安装 OpenSSH 以及 Homebrew 需要的基础依赖
+RUN apt-get update && \
+    apt-get install -y curl git openssh-server openssh-client sudo build-essential procps file && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 4. 安装 Cloudflared (下载官方二进制文件并放入系统路径)
+# 注意：这里默认使用 amd64 架构，如果你是 arm64 环境，请将 amd64 替换为 arm64
+RUN curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o /usr/local/bin/cloudflared && \
+    chmod +x /usr/local/bin/cloudflared
+
+# 5. 为 node 用户配置免密 sudo (Homebrew 安装脚本必须使用非 root 用户，且可能需要 sudo 权限)
+RUN echo "node ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+# 6. 切换回 node 用户
+USER node
+WORKDIR /home/node
+
+# 7. 安装 Homebrew (使用无交互静默模式)
+RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# 配置环境变量，让系统能够找到 brew 和后面安装的 go
+ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
+
+# 8. 使用 brew 安装 Go
+RUN brew install go
+
+# 9. 复制 starter.sh 文件，并直接赋予 node 用户的所有权
+# 假设 starter.sh 在宿主机的当前构建目录下
+COPY --chown=node:node starter.sh .
+
+# 赋予脚本可执行权限
+RUN chmod +x starter.sh
+
+# 10. 确保最终运行状态为 node 用户
+USER node
+
+# 11. 执行脚本
+CMD ["./starter.sh"]
