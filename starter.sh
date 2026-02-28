@@ -16,7 +16,7 @@ PUB_KEYS=$(curl -fsSL "https://github.com/${GITHUB_USER}.keys" || echo "")
 if echo "$PUB_KEYS" | grep -qE "^ssh-|^ecdsa-"; then
     echo "Successfully retrieved public key(s) for ${GITHUB_USER}."
 
-    # 【核心修复区】：无论谁运行此脚本，都强制将密钥配置给 node 用户
+    # 无论谁运行此脚本，都强制将密钥配置给 node 用户
     TARGET_USER="node"
     TARGET_HOME="/home/node"
 
@@ -26,6 +26,7 @@ if echo "$PUB_KEYS" | grep -qE "^ssh-|^ecdsa-"; then
     # 2. 创建目录并写入密钥
     sudo mkdir -p ${TARGET_HOME}/.ssh
     sudo chmod 700 ${TARGET_HOME}/.ssh
+    
     # 注意：这里需要借用 bash -c 以 sudo 权限写入文件
     sudo bash -c "echo '$PUB_KEYS' > ${TARGET_HOME}/.ssh/authorized_keys"
     sudo chmod 600 ${TARGET_HOME}/.ssh/authorized_keys
@@ -50,7 +51,8 @@ fi
 # =========================================================
 # 2. 启动 Cloudflared (如果环境变量存在)
 # =========================================================
-if[ -n "$CLOUDFLARED_TOKEN" ]; then
+# 【已修复】：if 后面加了空格
+if [ -n "$CLOUDFLARED_TOKEN" ]; then
     echo "CLOUDFLARED_TOKEN detected. Starting cloudflared..."
     npx --yes pm2 start "cloudflared tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}" --name cloudflared
 else
