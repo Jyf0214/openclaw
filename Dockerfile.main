@@ -5,7 +5,7 @@ FROM openclaw:local
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装必要系统依赖
+# 安装必要系统依赖（不再安装 sudo，保持 HF Space 兼容）
 RUN apt-get update && \
     apt-get install -y curl git openssh-server openssh-client build-essential procps file && \
     apt-get clean && \
@@ -25,7 +25,7 @@ RUN mkdir -p /home/node/.ssh && \
 # 生成 SSH 主机密钥
 RUN ssh-keygen -A
 
-# 让 node 用户也能访问主机密钥（非 root 启动 sshd 必须）
+# 让 node 用户也能访问主机密钥
 RUN chown node:node /etc/ssh/ssh_host_*_key && \
     chmod 600 /etc/ssh/ssh_host_*_key
 
@@ -37,26 +37,34 @@ RUN sed -i 's/#Port 22/Port 10214/' /etc/ssh/sshd_config && \
     echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && \
     echo 'PidFile /tmp/sshd.pid' >> /etc/ssh/sshd_config
 
-# 准备 /run/sshd（运行时 tmpfs 可被 node 写入）
+# 准备 /run/sshd（运行时 node 可写入）
 RUN mkdir -p /run/sshd && chmod 1777 /run/sshd
 
-# 全局安装 pm2（node 用户可直接使用）
+# 全局安装 pm2
 RUN npm install -g pm2
+
+# === 关键修复：提前创建 Homebrew 目录并 chown 给 node ===
+RUN mkdir -p /home/linuxbrew/.linuxbrew && \
+    chown -R node:node /home/linuxbrew
 
 # 切换到 node 用户安装 Homebrew + Go
 USER node
 WORKDIR /home/node
 
+# Homebrew 安装（现在可以成功）
 RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
+# 配置 PATH（放在这里让后续 RUN 生效）
 ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
+
+# 使用 brew 安装 Go
 RUN brew install go
 
 # 复制并准备启动脚本
 COPY --chown=node:node starter.sh /home/node/starter.sh
 RUN chmod +x /home/node/starter.sh
 
-# 最终权限处理（全部 root 完成）
+# 最终权限处理
 USER root
 RUN mkdir -p /home/node/.openclaw && \
     chmod -R 777 /home/node/.openclaw && \
