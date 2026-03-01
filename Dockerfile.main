@@ -38,7 +38,7 @@ RUN npm install -g pm2
 
 # 关键：给 node 用户免密 sudo（非 HF Space 使用）
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-RUN curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard
+
 
 # Homebrew 目录提前准备（兼容两种环境）
 RUN mkdir -p /home/linuxbrew/.linuxbrew && chown -R node:node /home/linuxbrew
@@ -51,6 +51,8 @@ RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.co
 
 ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 RUN brew install go
+
+RUN sudo curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard
 
 # 复制启动脚本
 COPY --chown=node:node starter.sh /home/node/starter.sh
