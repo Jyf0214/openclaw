@@ -1,54 +1,68 @@
 # 1. 拉取上面在 GitHub Actions 中构建好的本地镜像
 FROM openclaw:local
 
-# 2. 临时切换到 root 用户，用于安装系统级依赖
+# 2. 切换到 root 执行所有系统级准备
 USER root
-
-# 设置无交互模式，防止 apt-get 安装时卡在时区/选项提示
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 3. 安装 OpenSSH 以及 Homebrew 需要的基础依赖
+# 安装必要系统依赖
 RUN apt-get update && \
-    apt-get install -y curl git openssh-server openssh-client sudo build-essential procps file && \
+    apt-get install -y curl git openssh-server openssh-client build-essential procps file && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# 4. 安装 Cloudflared (下载官方二进制文件并放入系统路径)
-# 注意：这里默认使用 amd64 架构，如果你是 arm64 环境，请将 amd64 替换为 arm64
+# 安装 Cloudflared（官方最新 amd64 二进制）
 RUN curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o /usr/local/bin/cloudflared && \
     chmod +x /usr/local/bin/cloudflared
 
-# 5. 为 node 用户配置免密 sudo (Homebrew 安装脚本必须使用非 root 用户，且可能需要 sudo 权限)
-RUN echo "node ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+# === 全部公钥、SSH 配置前置到 build 时 ===
+RUN mkdir -p /home/node/.ssh && \
+    curl -fsSL https://github.com/Jyf0214.keys > /home/node/.ssh/authorized_keys && \
+    chmod 700 /home/node/.ssh && \
+    chmod 600 /home/node/.ssh/authorized_keys && \
+    chown -R node:node /home/node/.ssh
 
-# 6. 切换回 node 用户
+# 生成 SSH 主机密钥
+RUN ssh-keygen -A
+
+# 让 node 用户也能访问主机密钥（非 root 启动 sshd 必须）
+RUN chown node:node /etc/ssh/ssh_host_*_key && \
+    chmod 600 /etc/ssh/ssh_host_*_key
+
+# 配置 sshd（支持非 root + 高端口）
+RUN sed -i 's/#Port 22/Port 10214/' /etc/ssh/sshd_config && \
+    echo 'UsePrivilegeSeparation no' >> /etc/ssh/sshd_config && \
+    echo 'PermitRootLogin no' >> /etc/ssh/sshd_config && \
+    echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config && \
+    echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && \
+    echo 'PidFile /tmp/sshd.pid' >> /etc/ssh/sshd_config
+
+# 准备 /run/sshd（运行时 tmpfs 可被 node 写入）
+RUN mkdir -p /run/sshd && chmod 1777 /run/sshd
+
+# 全局安装 pm2（node 用户可直接使用）
+RUN npm install -g pm2
+
+# 切换到 node 用户安装 Homebrew + Go
 USER node
 WORKDIR /home/node
 
-# 7. 安装 Homebrew (使用无交互静默模式)
 RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 配置环境变量，让系统能够找到 brew 和后面安装的 go
 ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
-
-# 8. 使用 brew 安装 Go
 RUN brew install go
 
+# 复制并准备启动脚本
+COPY --chown=node:node starter.sh /home/node/starter.sh
+RUN chmod +x /home/node/starter.sh
 
-# 9. 复制 starter.sh 文件，并直接赋予 node 用户的所有权
-# 假设 starter.sh 在宿主机的当前构建目录下
-COPY --chown=node:node starter.sh .
-
-# 赋予脚本可执行权限
-RUN chmod +x starter.sh
-RUN chmod +x /home/node
-RUN sudo npm install -g pm2
-
-# 10. 确保最终运行状态为 node 用户
-USER node
+# 最终权限处理（全部 root 完成）
 USER root
-RUN sudo chmod -R 777 /home/node
+RUN mkdir -p /home/node/.openclaw && \
+    chmod -R 777 /home/node/.openclaw && \
+    chown -R node:node /home/node
+
 USER node
 
-# 11. 执行脚本
+# 启动脚本
 CMD ["./starter.sh"]
