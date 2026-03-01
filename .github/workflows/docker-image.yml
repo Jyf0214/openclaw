@@ -28,7 +28,7 @@ jobs:
       - name: Build local image from remote repository
         uses: docker/build-push-action@v5
         with:
-          context: https://github.com/openclaw/openclaw.git  # 直接使用远程仓库作为构建上下文
+          context: .  # 直接使用远程仓库作为构建上下文
           push: false                                        # 不推送
           load: true                                         # 加载到本地 Docker 缓存
           tags: openclaw:local                               # 命名为 openclaw:local
