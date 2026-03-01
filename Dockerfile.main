@@ -5,9 +5,9 @@ FROM openclaw:local
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装必要系统依赖（不再安装 sudo，保持 HF Space 兼容）
+# 安装必要系统依赖
 RUN apt-get update && \
-    apt-get install -y curl git openssh-server openssh-client build-essential procps file && \
+    apt-get install -y curl git openssh-server openssh-client build-essential sudo procps file && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
