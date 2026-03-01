@@ -52,7 +52,7 @@ RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.co
 ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 RUN brew install go
 
-RUN sudo curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard
+RUN sudo curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard || true
 
 # 复制启动脚本
 COPY --chown=node:node starter.sh /home/node/starter.sh
